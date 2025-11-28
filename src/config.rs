@@ -95,6 +95,7 @@ struct General {
     timing_method: Option<TimingMethod>,
     comparison: Option<String>,
     auto_splitter: Option<PathBuf>,
+    always_save_on_reset: Option<bool>,
 }
 
 #[derive(Default, Deserialize, Serialize)]
@@ -293,6 +294,10 @@ impl Config {
 
     pub fn set_mouse_pass_through_while_running(&mut self, b: bool) {
         self.window.mouse_pass_through_while_running = b;
+    }
+
+    pub fn should_always_save_times(&self) -> bool {
+        self.general.always_save_on_reset.unwrap_or(false)
     }
 
     // Just directly construct the HotkeySystem from the config.
@@ -600,11 +605,11 @@ fn default_run() -> Run {
 pub fn show_error(error: anyhow::Error) {
     // this MessageDialog is for displaying errors,
     // so I guess it's fine if it crashes? if it was going to crash anyway?
-    let _ = native_dialog::MessageDialog::new()
-        .set_type(native_dialog::MessageType::Error)
+    let _ = native_dialog::DialogBuilder::message()
+        .set_level(native_dialog::MessageLevel::Error)
         .set_title("Error")
         .set_text(&format!("{error:?}"))
-        .show_alert();
+        .alert();
 }
 
 pub fn or_show_error(result: Result<()>) {

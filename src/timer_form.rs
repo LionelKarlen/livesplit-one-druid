@@ -1,19 +1,6 @@
 use std::{path::Path, sync::Arc};
 
-use druid::{
-    commands,
-    menu::MenuEntry,
-    piet::PietImage,
-    theme,
-    widget::{Controller, Flex},
-    AppDelegate, AppLauncher, BoxConstraints, DelegateCtx, Env, Event, EventCtx, FileDialogOptions,
-    FileInfo, FileSpec, LayoutCtx, LifeCycle, LifeCycleCtx, Menu, MenuItem, Point, Selector, Size,
-    UpdateCtx, Widget, WidgetExt, WindowDesc, WindowId, WindowLevel,
-};
-use livesplit_core::{LayoutEditor, RunEditor, TimerPhase, TimingMethod};
 #[cfg(not(target_os = "macos"))]
-use native_dialog::MessageType;
-
 use crate::{
     config::or_show_error,
     consts::{
@@ -25,6 +12,17 @@ use crate::{
     HotkeysEditorLens, LayoutEditorLens, MainState, OpenWindow, RunEditorLens,
     WindowSettingsEditorLens, HOTKEY_SYSTEM,
 };
+use druid::{
+    commands,
+    menu::MenuEntry,
+    piet::PietImage,
+    theme,
+    widget::{Controller, Flex},
+    AppDelegate, AppLauncher, BoxConstraints, DelegateCtx, Env, Event, EventCtx, FileDialogOptions,
+    FileInfo, FileSpec, LayoutCtx, LifeCycle, LifeCycleCtx, Menu, MenuItem, Point, Selector, Size,
+    UpdateCtx, Widget, WidgetExt, WindowDesc, WindowId, WindowLevel,
+};
+use livesplit_core::{LayoutEditor, RunEditor, TimerPhase, TimingMethod};
 
 struct WithMenu<T> {
     // device: Device,
@@ -515,16 +513,28 @@ impl<T: Widget<MainState>> Widget<MainState> for WithMenu<T> {
                             .unwrap()
                             .current_attempt_has_new_best_times()
                         {
-                            let result = message_dialog_confirm(
+                            if data.config.borrow().should_always_save_times() {
+                                println!("always save");
+                                true
+                            } else {
+                                let result = message_dialog_confirm(
                                 "Update Times?",
                                 "You have beaten some of your best times. Do you want to update them?",
                             );
 
-                            if let Ok(wants_to_save_times) = result {
-                                wants_to_save_times
-                            } else {
-                                self.intent = Intent::NONE;
-                                break;
+                                match result {
+                                    Ok(wants_to_save_time) => wants_to_save_time,
+                                    Err(e) => match e {
+                                        native_dialog::Error::MissingDep => {
+                                            eprintln!("Missing Dependency, got: {e}.");
+                                            false
+                                        }
+                                        _ => {
+                                            self.intent = Intent::NONE;
+                                            false
+                                        }
+                                    },
+                                }
                             }
                         } else {
                             true
@@ -989,11 +999,12 @@ pub fn launch(state: MainState, window: WindowDesc<MainState>) {
 fn message_dialog_confirm(_title: &str, _text: &str) -> native_dialog::Result<bool> {
     // TODO: fix this MessageDialog so that it doesn't cause crashes on Mac
     #[cfg(not(target_os = "macos"))]
-    return native_dialog::MessageDialog::new()
+    return native_dialog::DialogBuilder::message()
+        .set_level(native_dialog::MessageLevel::Info)
         .set_title(_title)
         .set_text(_text)
-        .set_type(MessageType::Warning)
-        .show_confirm();
+        .confirm()
+        .show();
     // since the MessageDialog isn't working on Mac, assume Yes for now
     #[cfg(target_os = "macos")]
     return Ok(true);
